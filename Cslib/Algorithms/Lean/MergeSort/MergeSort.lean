@@ -7,6 +7,7 @@ Authors: Sorrachai Yingchareonthawornhcai
 module
 
 public import Cslib.Algorithms.Lean.TimeM
+public import Mathlib.Data.List.Sort
 public import Mathlib.Data.Nat.Cast.Order.Ring
 public import Mathlib.Data.Nat.Lattice
 public import Mathlib.Data.Nat.Log
@@ -109,6 +110,45 @@ theorem mergeSort_perm (xs : List α) : ⟪mergeSort xs⟫ ~ xs := by
 /-- MergeSort is functionally correct. -/
 theorem mergeSort_correct (xs : List α) : IsSorted ⟪mergeSort xs⟫ ∧ ⟪mergeSort xs⟫ ~ xs :=
   ⟨mergeSort_sorted xs, mergeSort_perm xs⟩
+
+/-- `mergeSort` computes the same sorted list as Lean's stable list merge sort. -/
+theorem mergeSort_eq_list_mergeSort (xs : List α) :
+    ⟪mergeSort xs⟫ = xs.mergeSort (· ≤ ·) := by
+  have hsorted₁ : (⟪mergeSort xs⟫).SortedLE := by
+    simpa [List.sortedLE_iff_pairwise] using mergeSort_sorted xs
+  have hsorted₂ : (xs.mergeSort (· ≤ ·)).SortedLE := List.sortedLE_mergeSort
+  exact List.Perm.eq_of_sortedLE hsorted₁ hsorted₂
+    ((mergeSort_perm xs).trans (List.mergeSort_perm xs (· ≤ ·)).symm)
+
+/-- mergeSort preserves the original order of any already-ordered pair. -/
+theorem mergeSort_pair_sublist {a b : α} {xs : List α}
+    (hab : a ≤ b) (h : [a, b] <+ xs) : [a, b] <+ ⟪mergeSort xs⟫ := by
+  rw [mergeSort_eq_list_mergeSort]
+  exact List.pair_sublist_mergeSort (fun _ _ _ => by grind) (fun _ _ => by grind)
+    (by simpa using hab) h
+
+/-- lists filtered to a single order-equivalence class are constant lists. -/
+private theorem filter_eqClass_eq_replicate_length (xs : List α) (k : α) :
+    xs.filter (fun x => (x ≤ k : Bool) && (k ≤ x : Bool)) =
+      List.replicate (xs.filter (fun x => (x ≤ k : Bool) && (k ≤ x : Bool))).length k := by
+  rw [List.eq_replicate_iff]
+  refine ⟨rfl, ?_⟩
+  intro x hx
+  simp only [mem_filter, Bool.and_eq_true] at hx
+  have hxk : x ≤ k := by simpa [decide_eq_true_eq] using hx.2.1
+  have hkx : k ≤ x := by simpa [decide_eq_true_eq] using hx.2.2
+  exact le_antisymm hxk hkx
+
+/-- mergeSort preserves each order-equivalence class as a filtered sublist. -/
+theorem mergeSort_stable (xs : List α) :
+    ∀ k : α,
+      (⟪mergeSort xs⟫).filter (fun x => (x ≤ k : Bool) && (k ≤ x : Bool)) =
+        xs.filter (fun x => (x ≤ k : Bool) && (k ≤ x : Bool)) := by
+  intro k
+  let p := fun x => (x ≤ k : Bool) && (k ≤ x : Bool)
+  have hperm : (⟪mergeSort xs⟫).filter p ~ xs.filter p := (mergeSort_perm xs).filter p
+  rw [filter_eqClass_eq_replicate_length (⟪mergeSort xs⟫) k,
+    filter_eqClass_eq_replicate_length xs k, hperm.length_eq]
 
 end Correctness
 
